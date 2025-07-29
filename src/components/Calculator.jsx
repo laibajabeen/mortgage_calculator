@@ -1,37 +1,60 @@
 import { useState } from "react";
-import toast, { Toaster } from "react-hot-toast";
+import { Toaster } from "react-hot-toast";
+import { any, z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import cal from "../assets/images/icon-calculator.svg";
+const schema = z.object({
+  amount: z
+    .string()
+    .min(1, "Amount is required")
+    .refine((val) => parseFloat(val) > 0, {
+      message: "Amount must be greater than 0",
+    }),
+  term: z.string().min(1, "Term is required"),
+
+  interestRate: z
+    .string()
+    .min(1, "Interest rate is required")
+    .refine((val) => parseFloat(val) > 0, {
+      message: "Term must be greater than 0",
+    }),
+  mortgageType: z.enum(["Repayment", "InterestOnly"], {
+    message: "Mortgage type is required",
+  }),
+});
 const Calculator = ({ setResults }) => {
-  const [amount, setAmount] = useState("");
-  const [term, setTerm] = useState("");
-  const [interestRate, setInterestRate] = useState("");
-  const [mortgageType, setMortgageType] = useState("");
-  const clearbutton = (e) => {
-    e.preventDefault();
-    setAmount("");
-    setTerm("");
-    setInterestRate("");
-    setMortgageType("");
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      amount: "",
+      term: "",
+      interestRate: "",
+      mortgageType: "",
+    },
+  });
+  const clearbutton = () => {
+    reset();
     setResults(null);
   };
 
-  const calculateRepayment = (e) => {
-    e.preventDefault();
-    if (!amount || !term || !interestRate || !mortgageType) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-    const principal = parseFloat(amount);
-    const years = parseFloat(term);
-    const rate = parseFloat(interestRate) / 100 / 12;
+  const onSubmit = (data) => {
+    const principal = parseFloat(data.amount);
+    const years = parseFloat(data.term);
+    const rate = parseFloat(data.interestRate) / 100 / 12;
 
     const n = years * 12;
 
     let monthlyPayment = 0;
 
-    if (mortgageType === "InterestOnly") {
+    if (data.mortgageType === "InterestOnly") {
       monthlyPayment = principal * rate;
-    } else if (mortgageType === "Repayment") {
+    } else if (data.mortgageType === "Repayment") {
       monthlyPayment =
         (principal * (rate * Math.pow(1 + rate, n))) /
         (Math.pow(1 + rate, n) - 1);
@@ -65,7 +88,7 @@ const Calculator = ({ setResults }) => {
         }}
       />
       <div className="h-full w-full ">
-        <form onSubmit={calculateRepayment} className="w-full p-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="w-full p-4">
           <div className="flex justify-between  items-center mb-4">
             <h1 className="text-3xl text-left font-semibold mb-4 mt-4">
               Mortgage Calculator
@@ -89,11 +112,14 @@ const Calculator = ({ setResults }) => {
             <input
               id="amount"
               type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              {...register("amount")}
               className="w-full border border-gray-300 outline-none rounded py-3 pl-10 pr-4 focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400"
             />
           </div>
+
+          {errors.amount && (
+            <p className="text-red-500 text-sm mt-1">{errors.amount.message}</p>
+          )}
           <div className="flex justify-between border-box gap-4">
             <div>
               <label htmlFor="" className="text-left block my-2">
@@ -106,12 +132,15 @@ const Calculator = ({ setResults }) => {
                 <input
                   id="term"
                   type="number"
-                  value={term}
-                  onChange={(e) => setTerm(e.target.value)}
+                  {...register("term")}
                   className="w-full border border-gray-300 outline-none rounded py-3 pl-6 pr-4 focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400"
                 />
               </div>
             </div>
+
+            {errors.term && (
+              <p className="text-red-500 text-sm mt-1">{errors.term.message}</p>
+            )}
             <div>
               <label htmlFor="" className="text-left block my-2">
                 Interest Rate
@@ -120,15 +149,22 @@ const Calculator = ({ setResults }) => {
                 <span className="absolute flex items-center right-0 top-1/2 transform -translate-y-1/2 text-gray-500 block bg-slate-100 h-full font-semibold px-2 py-1">
                   %
                 </span>
+
                 <input
+                  step="any"
+                  {...register("interestRate")}
                   id="interestRate"
                   type="number"
-                  value={interestRate}
-                  onChange={(e) => setInterestRate(e.target.value)}
                   className="w-full border border-gray-300 outline-none rounded py-3 pl-6 pr-4 focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400"
                 />
               </div>
             </div>
+
+            {errors.interestRate && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.interestRate.message}
+              </p>
+            )}
           </div>
           <br />
           <div className="text-left">
@@ -138,12 +174,11 @@ const Calculator = ({ setResults }) => {
             <br />
             <div className="w-auto border border-black-300 outline-none rounded py-2 px-3">
               <input
+                {...register("mortgageType")}
                 type="radio"
-                value="Repayment"
                 id="repayment"
                 name="mortgageType"
-                onChange={(e) => setMortgageType(e.target.value)}
-                checked={mortgageType === "Repayment"}
+                value="Repayment"
                 className="mr-2 accent-yellow-400 w-4 h-4"
               />
               <label htmlFor="">Repayment</label>
@@ -153,17 +188,21 @@ const Calculator = ({ setResults }) => {
               <input
                 id="interestOnly"
                 type="radio"
-                value="InterestOnly"
+                {...register("mortgageType")}
                 name="mortgageType"
-                onChange={(e) => setMortgageType(e.target.value)}
-                checked={mortgageType === "InterestOnly"}
+                value="InterestOnly"
                 className="mr-2 accent-yellow-400 w-4 h-4"
               />
               <label htmlFor="">Interest Only</label>
             </div>
+
+            {errors.mortgageType && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.mortgageType.message}
+              </p>
+            )}
             <br />
             <button
-              onClick={calculateRepayment}
               type="submit"
               className="border  flex justify-center items-center rounded-full py-2 m-4 block px-3"
               style={{ backgroundColor: "#d9da31", color: "white" }}
